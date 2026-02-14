@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Dumbbell, RefreshCw, Download, Upload, 
+  Dumbbell, Download, Upload, 
   AlertCircle, Loader2, Sparkles
 } from 'lucide-react';
 import { useWorkoutStore, Exercise } from '@/store/workout-store';
@@ -15,17 +15,6 @@ import { FooterStats } from '@/components/workout/footer-stats';
 import { HistoryPanel } from '@/components/workout/history-panel';
 import { SettingsPanel } from '@/components/workout/settings-panel';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -37,132 +26,19 @@ export default function ProTrackerPage() {
     setSessions,
     setHistory,
     setPersonalRecords,
-    setStreak,
-    setLast7Days,
     resetWorkout,
-    resetAllData
+    initializeData
   } = useWorkoutStore();
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch workouts from API
-  const fetchWorkouts = useCallback(async () => {
-    try {
-      const response = await fetch('/api/workouts');
-      const data = await response.json();
-      
-      if (data.success) {
-        // Merge with local completed sets
-        const localSessions = useWorkoutStore.getState().sessions;
-        const mergedSessions = data.data.map((session: { id: string; code: string; exercises: { id: string }[] }) => {
-          const localSession = localSessions.find(s => s.code === session.code);
-          if (localSession) {
-            return {
-              ...session,
-              exercises: session.exercises.map((ex: { id: string }) => {
-                const localEx = localSession.exercises.find(e => e.id === ex.id);
-                return {
-                  ...ex,
-                  completedSets: localEx?.completedSets || 0
-                };
-              })
-            };
-          }
-          return {
-            ...session,
-            exercises: session.exercises.map((ex: { id: string }) => ({
-              ...ex,
-              completedSets: 0
-            }))
-          };
-        });
-        setSessions(mergedSessions);
-      }
-    } catch (error) {
-      console.error('Failed to fetch workouts:', error);
-      toast.error('Failed to load workouts');
-    }
-  }, [setSessions]);
-
-  // Fetch history from API
-  const fetchHistory = useCallback(async () => {
-    try {
-      const response = await fetch('/api/history');
-      const data = await response.json();
-      
-      if (data.success) {
-        const historyData = data.data.history.map((h: { id: string; exerciseId: string; completedAt: string; sets: number; weight: number | null; notes: string | null; exercise: { name: string } }) => ({
-          id: h.id,
-          exerciseId: h.exerciseId,
-          exerciseName: h.exercise.name,
-          completedAt: h.completedAt,
-          sets: h.sets,
-          weight: h.weight,
-          notes: h.notes
-        }));
-        
-        setHistory(historyData);
-        setPersonalRecords(data.data.personalRecords);
-        setStreak(data.data.stats.streak);
-        setLast7Days(data.data.stats.last7Days);
-      }
-    } catch (error) {
-      console.error('Failed to fetch history:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setHistory, setPersonalRecords, setStreak, setLast7Days]);
-
-  // Save settings to API
-  const saveSettings = useCallback(async () => {
-    try {
-      await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-    }
-  }, [settings]);
-
-  // Record workout completion
-  const recordWorkout = useCallback(async (exerciseId: string, sets: number, weight?: number) => {
-    try {
-      const session = sessions.find(s => s.code === currentSessionCode);
-      const exercise = session?.exercises.find(e => e.id === exerciseId);
-      
-      await fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          exerciseId,
-          sets,
-          weight,
-          exerciseName: exercise?.name,
-          sessionId: session?.id
-        })
-      });
-      
-      // Refresh history
-      fetchHistory();
-    } catch (error) {
-      console.error('Failed to record workout:', error);
-    }
-  }, [sessions, currentSessionCode, fetchHistory]);
-
-  // Initial load
+  // Initialize data on first load
   useEffect(() => {
-    fetchWorkouts();
-    fetchHistory();
-  }, [fetchWorkouts, fetchHistory]);
-
-  // Save settings when they change
-  useEffect(() => {
-    saveSettings();
-  }, [settings, saveSettings]);
+    initializeData();
+    setIsLoading(false);
+  }, [initializeData]);
 
   // Apply theme class to document
   useEffect(() => {
